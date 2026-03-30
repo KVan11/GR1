@@ -1,9 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client"
   output   = "../generated/prisma"
@@ -11,5 +5,71 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           Int      @id @default(autoincrement())
+  username     String
+  password     String
+  email        String   @unique
+  created_date DateTime @default(now())
+  updated_date DateTime @updatedAt
+  role_id      Int
+  posts        Post[]
+  role         Role     @relation(fields: [role_id], references: [id])
+  vote         Vote?
+}
+
+model Role {
+  id          Int          @id @default(autoincrement())
+  role_name   String
+  permissions Permission[]
+  users       User[]
+}
+
+model Permission {
+  id              Int    @id @default(autoincrement())
+  role_id         Int
+  permission_name String
+  role            Role   @relation(fields: [role_id], references: [id])
+}
+
+model Post {
+  id           Int        @id @default(autoincrement())
+  user_id      Int
+  created_date DateTime   @default(now())
+  updated_date DateTime   @updatedAt
+  total_point  Int        @default(0)
+  content      String
+  image        String?
+  expired_time DateTime
+  tag_list     String
+  categories   CatePost[]
+  user         User       @relation(fields: [user_id], references: [id])
+  votes        Vote?
+}
+
+model Category {
+  id            Int        @id @default(autoincrement())
+  category_name String
+  posts         CatePost[]
+}
+
+model CatePost {
+  post_id     Int
+  category_id Int
+  categories  Category @relation(fields: [category_id], references: [id])
+  posts       Post     @relation(fields: [post_id], references: [id])
+
+  @@id([post_id, category_id])
+}
+
+model Vote {
+  id       Int    @id @default(autoincrement())
+  post_id  Int    @unique
+  tag_name String
+  point    Int
+  user_id  Int    @unique
+  post     Post   @relation(fields: [post_id], references: [id])
+  user     User   @relation(fields: [user_id], references: [id])
 }
