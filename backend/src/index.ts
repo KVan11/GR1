@@ -16,6 +16,15 @@ const options = {
         url: 'http://localhost:3000',
       },
     ],
+    components: {
+      securitySchemes: {
+        bearerAuth: {        // Tên này phải khớp với tên trong Route
+          type: 'http',
+          scheme: 'bearer',
+          bearerFormat: 'JWT',
+        },
+      },
+    },
   },
   apis: ['./src/routes/*.ts', './src/routes/*.js'], // Đường dẫn đến các file chứa chú thích API (JSDoc)
 };

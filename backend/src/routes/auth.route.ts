@@ -1,5 +1,7 @@
 import { Router } from 'express';
-import { register, login, getUsers } from '../controllers/auth.controller.js';
+import { register, login, getUsers, deleteUser } from '../controllers/auth.controller.js';
+import { verifyToken } from '../middlewares/auth.middleware.js';
+import { checkAdmin } from '../middlewares/admin.middleware.js';
 
 const router = Router();
 /**
@@ -14,6 +16,7 @@ const router = Router();
  * /api/auth/register:
  *  post:
  *   summary: Dang ky tai khoan moi
+ *   tags: [Auth]
  *   requestBody:
  *    required: true
  *    content:
@@ -73,6 +76,33 @@ router.post('/login', login);
  *    401:
  *     description: Khong co quyen truy cap do khong dang nhap hoac token khong hop le
  */
-router.get('/users', getUsers);
+router.get('/users',verifyToken, checkAdmin, getUsers);
+
+/**
+ * @swagger
+ * /api/auth/users/{id}:
+ *  delete:
+ *   summary: Xoa nguoi dung
+ *   tags: [Auth]
+ *   security:
+ *    - bearerAuth: []
+ *   parameters:
+ *    - in: path
+ *      name: id
+ *      required: true
+ *      schema:
+ *       type: integer
+ *       description: ID cua nguoi dung can xoa
+ *   responses:
+ *    200:
+ *     description: Xoa nguoi dung thanh cong
+ *    403:
+ *     description: Ban khong co quyen truy cap do khong dang nhap hoac token khong hop le
+ *    404:
+ *     description: Khong tim thay nguoi dung voi ID da cho
+ *    500:
+ *     description: Loi server khi xoa nguoi dung
+ */
+router.delete('/users/:id', verifyToken, checkAdmin, deleteUser);
 
 export default router;
