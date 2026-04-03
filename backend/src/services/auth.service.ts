@@ -1,6 +1,7 @@
 import { PrismaClient } from "../../generated/prisma/client.js";
 import { PrismaPg } from "@prisma/adapter-pg";
 import * as bcrypt from "bcryptjs";
+import e from "express";
 import jwt from 'jsonwebtoken';
 
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL! });
@@ -13,29 +14,55 @@ export const registerUser = async (userData: any) => {
   const hashedPassword = await bcrypt.hash(userData.password, 10);
   
   // 2. Lưu vào DB (Giả sử bạn đã có bảng User trong schema.prisma)
-  return await prisma.user.create({
+  const user = await prisma.user.create({
     data: {
       email: userData.email,
       username: userData.username,
       password: hashedPassword,
       role_id: 2 // Giả định 2 là ID của Role 'User'
+    },
+    select: {
+      id: true,
+      email: true,
+      username: true,
+      role_id: true
     }
   });
+  return user;
 };
 
 export const loginUser = async (email: string, password: string) => {
-  // 1. Tìm user
-  const user = await prisma.user.findUnique({ where: { email } });
-  if (!user) throw new Error("Email không tồn tại");
+  const user = await prisma.user.findUnique({ 
+    where: {email},
+    include: {
+      role: {
+        include: {
+          permissions: true
+        }
+      }
+    }
+  });
 
-  // 2. Kiểm tra mật khẩu
+  if (!user) throw new Error('Email không tồn tại');
+
+  //kiem tra mat khau
   const isMatch = await bcrypt.compare(password, user.password);
-  if (!isMatch) throw new Error("Mật khẩu sai");
+  if (!isMatch) throw new Error('Mật khẩu sai');
 
-  // 3. Tạo Token
-  const token = jwt.sign({ userId: user.id, roleId: user.role_id }, JWT_SECRET, { expiresIn: '1d' });
-  
-  return { token, user: { email: user.email } };
+  const permissions = user.role.permissions.map(p => p.permission_name);
+
+  // Tạo token JWT
+  const token = jwt.sign(
+    {
+      userId: user.id,
+      role: user.role.role_name,
+      permissions: permissions
+    },
+    JWT_SECRET,
+    { expiresIn: '1h' }
+  );
+
+  return { token, user: { email: user.email, permissions } };
 };
 
 export const getAllUsers = async () => {
