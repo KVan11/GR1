@@ -17,7 +17,7 @@ model User {
   role_id      Int
   posts        Post[]
   role         Role     @relation(fields: [role_id], references: [id])
-  vote         Vote?
+  vote         Vote[]
 }
 
 model Role {
@@ -46,7 +46,7 @@ model Post {
   tag_list     String
   categories   CatePost[]
   user         User       @relation(fields: [user_id], references: [id])
-  votes        Vote?
+  votes        Vote[]
 }
 
 model Category {
@@ -66,10 +66,12 @@ model CatePost {
 
 model Vote {
   id       Int    @id @default(autoincrement())
-  post_id  Int    @unique
+  post_id  Int
   tag_name String
   point    Int
-  user_id  Int    @unique
+  user_id  Int
   post     Post   @relation(fields: [post_id], references: [id])
   user     User   @relation(fields: [user_id], references: [id])
+
+  @@unique([post_id, user_id])
 }
