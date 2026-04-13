@@ -1,5 +1,5 @@
-import e, { Router } from 'express';
-import { createPost, getPosts } from '../controllers/post.controller.js';
+import { Router } from 'express';
+import { createPost, getPosts, updatePost } from '../controllers/post.controller.js';
 import { verifyToken, checkPermission } from '../middlewares/auth.middleware.js';
 import { deletePost } from '../controllers/post.controller.js';
 
@@ -29,10 +29,10 @@ const router = Router();
  *           properties:
  *             content:
  *               type: string
- *             categoryIds:
+ *             categories:
  *               type: array
  *               items:
- *                 type: number
+ *                 type: string
  *             tag_list:
  *               type: string
  *             expired_time:
@@ -45,6 +45,53 @@ const router = Router();
  *       description: Dữ liệu đầu vào không hợp lệ
  */
 router.post('/', verifyToken, checkPermission('POST_CREATE'),createPost);
+
+/**
+ * @swagger
+ * /api/post/{id}:
+ *  put:
+ *   summary: Cập nhật bài viết
+ *   tags: [Post]
+ *   security:
+ *    - bearerAuth: []
+ *   parameters:
+ *    - in: path
+ *      name: id
+ *      required: true
+ *      schema:
+ *       type: integer
+ *      description: ID của bài viết cần cập nhật
+ *   requestBody:
+ *    required: true
+ *    content:
+ *     application/json:
+ *      schema:
+ *       type: object
+ *       properties:
+ *        content:
+ *         type: string
+ *        categoryIds:
+ *         type: array
+ *         items:
+ *          type: string
+ *        tag_list:
+ *         type: string
+ *        image:
+ *         type: string
+ *        expired_time:
+ *         type: string
+ *         format: date-time
+ *   responses:
+ *    200:
+ *     description: Cập nhật bài viết thành công
+ *    401:
+ *     description: Chưa đăng nhập hoặc thiếu token
+ *    403:
+ *     description: Không có quyền POST_UPDATE hoặc token không hợp lệ
+ *    400:
+ *     description: Dữ liệu đầu vào không hợp lệ hoặc không có quyền sửa
+ */
+router.put('/:id', verifyToken, checkPermission('POST_UPDATE'), updatePost);
 
 /**
  * @swagger

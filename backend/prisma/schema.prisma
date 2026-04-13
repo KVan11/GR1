@@ -51,7 +51,7 @@ model Post {
 
 model Category {
   id            Int        @id @default(autoincrement())
-  category_name String
+  category_name String     @unique
   posts         CatePost[]
 }
 
