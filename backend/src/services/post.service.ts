@@ -86,7 +86,7 @@ export const updatePost = async (postId: number, userId: number, data: any) => {
 };
 
 export const getAllPosts = async () => {
-    return await prisma.post.findMany({
+    const posts = await prisma.post.findMany({
         include: {
             user: {
                 select: {
@@ -103,6 +103,24 @@ export const getAllPosts = async () => {
             created_date: 'desc'
         }
     });
+
+    const postsWithDetails = await Promise.all(posts.map(async (post) => {
+        const tagStats = await prisma.vote.groupBy({
+            by: ['tag_name'],
+            where: { post_id: post.id },
+            _sum: { point: true }
+        });
+
+        return {
+            ...post,
+            details: tagStats.map(stat => ({
+                tag_name: stat.tag_name,
+                points: stat._sum.point || 0
+            }))
+        };
+    }));
+
+    return postsWithDetails;
 };
 
 export const deletePost = async (postId: number, userId: number) => {
