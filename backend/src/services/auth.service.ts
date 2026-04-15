@@ -1,7 +1,6 @@
 import { PrismaClient } from "../../generated/prisma/client.js";
 import { PrismaPg } from "@prisma/adapter-pg";
 import * as bcrypt from "bcryptjs";
-import e from "express";
 import jwt from 'jsonwebtoken';
 
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL! });
@@ -10,6 +9,10 @@ export const prisma = new PrismaClient({ adapter });
 const JWT_SECRET = process.env.JWT_SECRET || 'secret_key';
 
 export const registerUser = async (userData: any) => {
+  if (!userData?.email || !userData?.username || !userData?.password) {
+    throw new Error('Thiếu email, username hoặc password');
+  }
+
   // 1. Băm mật khẩu
   const hashedPassword = await bcrypt.hash(userData.password, 10);
   
