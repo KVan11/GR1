@@ -1,73 +1,34 @@
-# React + TypeScript + Vite
+# Frontend (React + Vite) ket noi Express backend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Tai lieu nay huong dan cau hinh giao dien de lam viec voi API Express ma khong can thay doi cau truc backend.
 
-Currently, two official plugins are available:
+## Kien truc ket noi
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- Frontend goi API qua duong dan tuong doi `/api`.
+- Vite dev server proxy `/api` sang `http://localhost:3000` (Express).
+- Backend giu nguyen cac route:
+  - `/api/auth`
+  - `/api/post`
+  - `/api/vote`
 
-## React Compiler
+## Chay du an local
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+1. Chay backend (Express) tai cong `3000`.
+2. Chay frontend Vite:
 
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm install
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+Mac dinh frontend se goi qua proxy den Express.
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## Tuy chinh endpoint API (tuy chon)
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+Neu muon goi truc tiep API (khong qua proxy), tao file `.env`:
+
+```env
+VITE_API_URL=http://localhost:3000/api
 ```
+
+Neu khong khai bao `VITE_API_URL`, frontend se dung gia tri mac dinh la `/api`.

@@ -1,9 +1,15 @@
-export const Input = ({ label, ...props }: any) => (
-  <div className="mb-4">
-    <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
-    <input 
-      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" 
-      {...props} 
+import type { InputHTMLAttributes } from 'react';
+
+type InputProps = InputHTMLAttributes<HTMLInputElement> & {
+  label: string;
+};
+
+export const Input = ({ label, ...props }: InputProps) => (
+  <div className="grid gap-1.5">
+    <label className="text-sm font-semibold text-slate-700">{label}</label>
+    <input
+      className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-slate-900 outline-none transition focus:border-blue-600 focus:ring-4 focus:ring-blue-200"
+      {...props}
     />
   </div>
 );
