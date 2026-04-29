@@ -28,8 +28,9 @@ export const LoginForm = () => {
     try {
       const res = await authApi.login(formData);
       localStorage.setItem('token', res.data.token);
+      localStorage.setItem('user', JSON.stringify(res.data.user));
       alert('Đăng nhập thành công!');
-      navigate('/'); // Về trang chủ
+      navigate('/profile'); // Về trang chủ
     } catch (error: unknown) {
       const apiError = error as { response?: { data?: { error?: string } } };
       const message = apiError.response?.data?.error ?? 'Đăng nhập thất bại';
