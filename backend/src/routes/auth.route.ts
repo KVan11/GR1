@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { register, login, getUsers, deleteUser } from '../controllers/auth.controller.js';
+import { register, login, googleLogin, getUsers, deleteUser } from '../controllers/auth.controller.js';
 import { verifyToken, checkPermission } from '../middlewares/auth.middleware.js';
 
 const router = Router();
@@ -60,6 +60,29 @@ router.post('/register', register);    // URL: http://localhost:3000/api/auth/re
  *     description: Sai mat khau hoac email khong ton tai
  */
 router.post('/login', login);
+
+/**
+ * @swagger
+ * /api/auth/google-login:
+ *  post:
+ *   summary: Dang nhap bang Google
+ *   tags: [Auth]
+ *   requestBody:
+ *    required: true
+ *    content:
+ *     application/json:
+ *      schema:
+ *       type: object
+ *       properties:
+ *        token:
+ *         type: string
+ *   responses:
+ *    200:
+ *     description: Dang nhap thanh cong
+ *    401:
+ *     description: Token khong hop le hoac khong the xac thuc
+ */
+router.post('/google', googleLogin);
 
 /**
  * @swagger

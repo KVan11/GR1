@@ -16,3 +16,6 @@ app.use('/api/post', postRouter);
 app.use('/api/vote', voteRouter);
 
 export default app;
+
+///auth/userinfo .email
+///auth/userinfo .username

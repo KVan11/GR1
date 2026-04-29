@@ -20,6 +20,16 @@ export const login = async (req: Request, res: Response) => {
   }
 };
 
+export const googleLogin = async (req: Request, res: Response) => {
+  try {
+    const { token } = req.body;
+    const data = await AuthService.googleLoginUser(token);
+    res.status(200).json({ message: "Đăng nhập thành công", ...data });
+  } catch (error: any) {
+    res.status(401).json({ error: error.message });
+  }
+}
+
 export const getUsers = async (req: Request, res: Response) => {
   try {
     const users = await AuthService.getAllUsers();

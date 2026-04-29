@@ -2,11 +2,13 @@ import { PrismaClient } from "../../generated/prisma/client.js";
 import { PrismaPg } from "@prisma/adapter-pg";
 import * as bcrypt from "bcryptjs";
 import jwt from 'jsonwebtoken';
+import { OAuth2Client } from "google-auth-library";
 
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL! });
 export const prisma = new PrismaClient({ adapter });
 
 const JWT_SECRET = process.env.JWT_SECRET || 'secret_key';
+const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 export const registerUser = async (userData: any) => {
   if (!userData?.email || !userData?.username || !userData?.password) {
@@ -22,7 +24,7 @@ export const registerUser = async (userData: any) => {
       email: userData.email,
       username: userData.username,
       password: hashedPassword,
-      role_id: 2 // Giả định 2 là ID của Role 'User'
+      role_id: 2
     },
     select: {
       id: true,
@@ -65,7 +67,16 @@ export const loginUser = async (email: string, password: string) => {
     { expiresIn: '1h' }
   );
 
-  return { token, user: { email: user.email, permissions } };
+  return {
+    token,
+    user: {
+      id: user.id,
+      email: user.email,
+      username: user.username,
+      role: user.role.role_name,
+      permissions,
+    },
+  };
 };
 
 export const getAllUsers = async () => {
@@ -83,6 +94,81 @@ export const getAllUsers = async () => {
     }
   })
 }
+export const googleLoginUser = async (credential: string) => {
+  if (!credential) {
+    throw new Error('Thiếu token Google');
+  }
+
+  // const { OAuth2Client } = await import('google-auth-library');
+  // const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+
+  const ticket = await googleClient.verifyIdToken({
+    idToken: credential, 
+    audience: process.env.GOOGLE_CLIENT_ID,
+  }as any);
+
+  const payload = ticket.getPayload();
+  if (!payload || !payload.email) {
+    throw new Error('Không lấy được email từ Google hoặc xác thực thất bại');
+  }
+
+  const email = payload.email;
+  const name = payload.name;
+  let user = await prisma.user.findUnique({
+    where: { email },
+    include: {
+      role: {
+        include: {
+          permissions: true,
+        },
+      },
+    },
+  });
+
+  if (!user) {
+    const username = (name || email.split('@')[0] || 'User').trim();
+    const hashedPassword = await bcrypt.hash(`google-${email}-${Date.now()}`, 10);
+
+    user = await prisma.user.create({
+      data: {
+        email,
+        username,
+        password: hashedPassword,
+        role_id: 2,
+      },
+      include: {
+        role: {
+          include: {
+            permissions: true,
+          },
+        },
+      },
+    });
+  }
+
+  const permissions = user.role.permissions.map((p) => p.permission_name);
+  const token = jwt.sign(
+    {
+      userId: user.id,
+      role: user.role.role_name,
+      permissions,
+    },
+    JWT_SECRET,
+    { expiresIn: '1h' }
+  );
+
+  return {
+    token,
+    user: {
+      id: user.id,
+      email: user.email,
+      username: user.username,
+      role: user.role.role_name,
+      permissions,
+    },
+  };
+};
+
 export const removeUser = async (id: number) => {
   return await prisma.user.delete({
     where: { id },
