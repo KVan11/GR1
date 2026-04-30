@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { register, login, googleLogin, getUsers, deleteUser } from '../controllers/auth.controller.js';
+import { register, login, googleLogin, facebookLogin, getUsers, deleteUser } from '../controllers/auth.controller.js';
 import { verifyToken, checkPermission } from '../middlewares/auth.middleware.js';
 
 const router = Router();
@@ -83,6 +83,29 @@ router.post('/login', login);
  *     description: Token khong hop le hoac khong the xac thuc
  */
 router.post('/google', googleLogin);
+
+/**
+ * @swagger
+ * /api/auth/facebook:
+ *  post:
+ *   summary: Dang nhap bang Facebook
+ *   tags: [Auth]
+ *   requestBody:
+ *    required: true
+ *    content:
+ *     application/json:
+ *      schema:
+ *       type: object
+ *       properties:
+ *        token:
+ *         type: string
+ *   responses:
+ *    200:
+ *     description: Dang nhap thanh cong
+ *    401:
+ *     description: Token khong hop le hoac khong the xac thuc
+ */
+router.post('/facebook', facebookLogin);
 
 /**
  * @swagger

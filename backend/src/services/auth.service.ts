@@ -15,25 +15,42 @@ export const registerUser = async (userData: any) => {
     throw new Error('Thiếu email, username hoặc password');
   }
 
+  const existingUser = await prisma.user.findUnique({
+    where: { email: userData.email },
+    select: { id: true },
+  });
+
+  if (existingUser) {
+    throw new Error('Email đã được sử dụng');
+  }
+
   // 1. Băm mật khẩu
   const hashedPassword = await bcrypt.hash(userData.password, 10);
   
   // 2. Lưu vào DB (Giả sử bạn đã có bảng User trong schema.prisma)
-  const user = await prisma.user.create({
-    data: {
-      email: userData.email,
-      username: userData.username,
-      password: hashedPassword,
-      role_id: 2
-    },
-    select: {
-      id: true,
-      email: true,
-      username: true,
-      role_id: true
+  try {
+    const user = await prisma.user.create({
+      data: {
+        email: userData.email,
+        username: userData.username,
+        password: hashedPassword,
+        role_id: 2
+      },
+      select: {
+        id: true,
+        email: true,
+        username: true,
+        role_id: true
+      }
+    });
+    return user;
+  } catch (error: any) {
+    if (error?.code === 'P2002') {
+      throw new Error('Email đã được sử dụng');
     }
-  });
-  return user;
+
+    throw error;
+  }
 };
 
 export const loginUser = async (email: string, password: string) => {
@@ -167,6 +184,64 @@ export const googleLoginUser = async (credential: string) => {
       permissions,
     },
   };
+};
+
+export const facebookLoginUser = async (token: string) => {
+  const fbRes = await fetch(`https://graph.facebook.com/me?fields=id,name,email&access_token=${token}`);
+  const fbData: any = await fbRes.json();
+
+  if(!fbData.email) throw new Error('Không lấy được email từ Facebook');
+
+  let user = await prisma.user.findUnique({
+    where: { email: fbData.email },
+    include: {
+      role: {
+        include: {
+          permissions: true,
+        },
+      },
+    },
+  });
+
+  if (!user) {
+    const hashedPassword = await bcrypt.hash(`facebook-${fbData.email}-${Date.now()}`, 10);
+    user = await prisma.user.create({
+      data: {
+        email: fbData.email,
+        username: fbData.name,
+        password: hashedPassword,
+        role_id: 2,
+      },
+      include: {
+        role: {
+          include: {
+            permissions: true,
+          },
+        },
+      },
+    });
+  }
+  const permissions = user.role.permissions.map((p) => p.permission_name);
+  const jwtToken = jwt.sign(
+    {
+      userId: user.id,
+      role: user.role.role_name,
+      permissions,
+    },
+    JWT_SECRET,
+    { expiresIn: '1h' }
+  );
+
+  return {
+    token: jwtToken,
+    user: {
+      id: user.id,
+      email: user.email,
+      username: user.username,
+      role: user.role.role_name,
+      permissions,
+    },
+  }
 };
 
 export const removeUser = async (id: number) => {
