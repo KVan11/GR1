@@ -244,6 +244,97 @@ export const facebookLoginUser = async (token: string) => {
   }
 };
 
+export const hustLoginUser = async (taikhoan: string, matkhau: string) => {
+  if(!taikhoan || !matkhau) {
+    throw new Error ('Thiếu tài khoản hoặc mật khẩu Hust')
+  }
+
+  const apiUrl = process.env.HUST_AUTH_API_URL;
+
+  const queryParams = new URLSearchParams({
+    taikhoan: taikhoan.trim(),
+    matkhau: matkhau.trim()
+  }).toString();
+
+  const fullUrl = `${apiUrl}?${queryParams}`;
+  console.log("Đang gọi URL:", fullUrl);
+  const response = await fetch(fullUrl, {
+    method: 'GET',
+    headers: {
+      'accept': 'text/plain',
+    },
+  });
+
+  const result = (await response.text()).trim();
+
+  if(result !== "1") {
+    throw new Error ('Tài khoản hoặc mật khẩu không chính xác')
+  }
+
+  let user = await prisma.user.findUnique({
+    where: { email: taikhoan },
+    include: {
+      role: {
+        include: {
+          permissions: true
+        },
+      },
+    },
+  });
+
+  if (!user) {
+    const emailPrefix = taikhoan.split('@')[0] ?? taikhoan;
+    const username = emailPrefix.split('.')[0] ?? emailPrefix;
+    const hashedPassword = await bcrypt.hash(`hust-auth-${Date.now()}`, 10);
+
+    const createdUser = await prisma.user.create({
+      data: {
+        email: taikhoan,
+        username: username,
+        password: hashedPassword,
+        role_id: 2,
+      },
+    });
+
+    user = await prisma.user.findUnique({
+      where: { id: createdUser.id },
+      include: {
+        role: {
+          include: {
+            permissions: true
+          },
+        },
+      },
+    });
+
+    if (!user) {
+      throw new Error('Không thể tạo người dùng')
+    }
+  }
+
+  const permissions = user.role.permissions.map((p) => p.permission_name)
+  const token = jwt.sign (
+    {
+      userId: user.id,
+      role: user.role.role_name,
+      permissions: permissions,
+    },
+    JWT_SECRET,
+    { expiresIn: '1h'}
+  );
+
+  return {
+    token,
+    user: {
+      id: user.id,
+      email: user.email,
+      username: user.username,
+      role: user.role.role_name,
+      permissions,
+    },
+  };
+};
+
 export const removeUser = async (id: number) => {
   return await prisma.user.delete({
     where: { id },

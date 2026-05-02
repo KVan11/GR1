@@ -132,6 +132,37 @@ export const AuthForm = <T extends string>({
     }, 500);
   };
 
+  const handleHustLogin = async () => {
+    const emailHust = values['email' as T];
+    const passwordHust = values['password' as T];
+
+    if(!emailHust || !passwordHust) {
+      alert('Hãy nhập email và mật khẩu Hust!');
+      return;
+    }
+
+    if(!emailHust.endsWith('@sis.hust.edu.vn') && !emailHust.endsWith('@hust.edu.vn')) {
+      alert('Hãy sử dụng mail Hust');
+      return;
+    }
+
+    try {
+      const res = await axiosClient.post('/auth/hust', {
+        taikhoan: emailHust,
+        matkhau: passwordHust,
+      });
+
+      localStorage.setItem('token', res.data.token);
+      localStorage.setItem('user', JSON.stringify(res.data.user));
+      alert('Đăng nhập thành công');
+      navigate('/profile');
+    }
+    catch (error: any) {
+      const message = error.response?.data?.error ?? 'Xác thực HUST thất bại';
+      alert(message);
+    }
+  }
+
   return (
     <GoogleOAuthProvider clientId={googleClientId}>
       <div className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-7 shadow-[0_20px_40px_rgba(15,23,42,0.12)]">
@@ -184,6 +215,14 @@ export const AuthForm = <T extends string>({
               <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
             </svg>
             Tiếp tục sử dụng dịch vụ Facebook
+          </button>
+          <button
+            type="button"
+            onClick={handleHustLogin}
+            className="inline-flex w-fit items-center justify-center gap-2 rounded-full border border-red-200 bg-white px-6 py-2.5 text-sm font-normal text-red-700 transition hover:bg-red-50 self-center"
+          >
+            <img src="https://cdn.haitrieu.com/wp-content/uploads/2021/10/Logo-DH-Bach-Khoa-Ha-Noi-HUST-1021x1536.png" className="h-5" alt="HUST" />
+            Xác thực qua tài khoản HUST
           </button>
         </div>
         {footer ? (

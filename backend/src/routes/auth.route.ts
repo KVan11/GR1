@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { register, login, googleLogin, facebookLogin, getUsers, deleteUser } from '../controllers/auth.controller.js';
+import { register, login, googleLogin, facebookLogin, hustLogin, getUsers, deleteUser } from '../controllers/auth.controller.js';
 import { verifyToken, checkPermission } from '../middlewares/auth.middleware.js';
 
 const router = Router();
@@ -109,6 +109,31 @@ router.post('/facebook', facebookLogin);
 
 /**
  * @swagger
+ * /api/auth/hust:
+ *  post:
+ *   summary: Dang nhap bang tai khoan HUST
+ *   tags: [Auth]
+ *   requestBody:
+ *    required: true
+ *    content:
+ *     application/json:
+ *      schema:
+ *       type: object
+ *       properties:
+ *        taikhoan:
+ *         type: string
+ *        matkhau:
+ *         type: string
+ *   responses:
+ *    200:
+ *     description: Dang nhap thanh cong
+ *    401:
+ *     description: Tai khoan hoac mat khau khong chinh xac
+ */
+router.post('/hust', hustLogin);
+
+/**
+ * @swagger
  * /api/auth/users:
  *  get:
  *   summary: Lay danh sach toan bo nguoi dung
@@ -125,6 +150,7 @@ router.post('/facebook', facebookLogin);
  *     description: Ban khong co quyen truy cap do khong phai admin
  */
 router.get('/users', verifyToken, checkPermission('USER_VIEW'), getUsers);
+
 /**
  * @swagger
  * /api/auth/users/{id}:

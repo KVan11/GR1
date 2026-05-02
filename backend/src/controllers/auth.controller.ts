@@ -41,6 +41,17 @@ export const facebookLogin = async (req: Request, res: Response) => {
   }
 }
 
+export const hustLogin = async (req: Request, res: Response) => {
+  try {
+    const {taikhoan, matkhau} = req.body;
+    const data = await AuthService.hustLoginUser(taikhoan, matkhau);
+    res.status(200).json({ message: "Đăng nhập thành công", ...data })
+  }
+  catch (error: any) {
+    res.status(401).json({ error: error.message });
+  }
+}
+
 export const getUsers = async (req: Request, res: Response) => {
   try {
     const users = await AuthService.getAllUsers();
