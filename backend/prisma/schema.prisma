@@ -12,6 +12,9 @@ model User {
   username     String
   password     String
   email        String   @unique
+  google_id    String?  @unique
+  facebook_id  String?  @unique
+  hust_id      String?  @unique
   created_date DateTime @default(now())
   updated_date DateTime @updatedAt
   role_id      Int

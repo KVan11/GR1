@@ -9,6 +9,17 @@ export const prisma = new PrismaClient({ adapter });
 
 const JWT_SECRET = process.env.JWT_SECRET || 'secret_key';
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+const generateToken = (user: any) => {
+  const permissions = user.role.permissions.map((p: any) => p.permission_name);
+  return {
+    token: jwt.sign(
+      { userId: user.id, role: user.role.role_name, permissions },
+      JWT_SECRET,
+      { expiresIn: '1h' }
+    ),
+    permissions
+  };
+};
 
 export const registerUser = async (userData: any) => {
   if (!userData?.email || !userData?.username || !userData?.password) {
@@ -71,18 +82,7 @@ export const loginUser = async (email: string, password: string) => {
   const isMatch = await bcrypt.compare(password, user.password);
   if (!isMatch) throw new Error('Mật khẩu sai');
 
-  const permissions = user.role.permissions.map(p => p.permission_name);
-
-  // Tạo token JWT
-  const token = jwt.sign(
-    {
-      userId: user.id,
-      role: user.role.role_name,
-      permissions: permissions
-    },
-    JWT_SECRET,
-    { expiresIn: '1h' }
-  );
+  const { token, permissions } = generateToken(user);
 
   return {
     token,
@@ -125,14 +125,17 @@ export const googleLoginUser = async (credential: string) => {
   }as any);
 
   const payload = ticket.getPayload();
-  if (!payload || !payload.email) {
-    throw new Error('Không lấy được email từ Google hoặc xác thực thất bại');
+  if (!payload) {
+    throw new Error('Invalid Google token payload');
+  }
+  const googleId = payload.sub;
+  const email = payload.email;
+  if (!email) {
+    throw new Error('Invalid Google token payload');
   }
 
-  const email = payload.email;
-  const name = payload.name;
-  let user = await prisma.user.findUnique({
-    where: { email },
+  let user: any = await prisma.user.findUnique({
+    where: { google_id: googleId },
     include: {
       role: {
         include: {
@@ -143,36 +146,56 @@ export const googleLoginUser = async (credential: string) => {
   });
 
   if (!user) {
-    const username = (name || email.split('@')[0] || 'User').trim();
-    const hashedPassword = await bcrypt.hash(`google-${email}-${Date.now()}`, 10);
-
-    user = await prisma.user.create({
-      data: {
-        email,
-        username,
-        password: hashedPassword,
-        role_id: 2,
-      },
-      include: {
-        role: {
-          include: {
-            permissions: true,
-          },
+    if (email) {
+      user = await prisma.user.findUnique ({
+        where: {email},
+        include :{
+          role: {
+            include: {
+              permissions: true
+            }
+          }
+        }
+      });
+    }
+    
+    if (user) {
+      user = await prisma.user.update({
+        where: { id: user.id},
+        data :{
+          google_id: googleId
         },
-      },
-    });
+        include:{
+          role: {
+            include: {
+              permissions: true
+            }
+          }
+        }
+      })
+    }
+    else {
+      const hashedPassword = await bcrypt.hash(`google-${Date.now()}`, 10);
+      user = await prisma.user.create({
+        data: {
+          email,
+          username: (payload.name ?? email.split('@')[0]) as string,
+          password: hashedPassword,
+          google_id: googleId,
+          role_id: 2
+        },
+        include: {
+          role:{
+            include: {
+              permissions: true
+            }
+          }
+        }
+      })
+    }
   }
 
-  const permissions = user.role.permissions.map((p) => p.permission_name);
-  const token = jwt.sign(
-    {
-      userId: user.id,
-      role: user.role.role_name,
-      permissions,
-    },
-    JWT_SECRET,
-    { expiresIn: '1h' }
-  );
+  const { token, permissions } = generateToken(user);;
 
   return {
     token,
@@ -191,9 +214,11 @@ export const facebookLoginUser = async (token: string) => {
   const fbData: any = await fbRes.json();
 
   if(!fbData.email) throw new Error('Không lấy được email từ Facebook');
+  
+  const facebookId = fbData.id;
 
   let user = await prisma.user.findUnique({
-    where: { email: fbData.email },
+    where: { facebook_id: facebookId },
     include: {
       role: {
         include: {
@@ -204,33 +229,52 @@ export const facebookLoginUser = async (token: string) => {
   });
 
   if (!user) {
-    const hashedPassword = await bcrypt.hash(`facebook-${fbData.email}-${Date.now()}`, 10);
-    user = await prisma.user.create({
-      data: {
-        email: fbData.email,
-        username: fbData.name,
-        password: hashedPassword,
-        role_id: 2,
-      },
+    user = await prisma.user.findUnique({
+      where: {email: fbData.email},
       include: {
         role: {
           include: {
-            permissions: true,
-          },
+            permissions: true
+          }
+        }
+      }
+    })
+
+    if(user){
+      user = await prisma.user.update ({
+        where: {id: user.id},
+        data: { facebook_id: facebookId},
+        include: {
+          role: {
+            include: {
+              permissions: true
+            }
+          }
+        }
+      })
+    }
+    else {
+      const hashedPassword = await bcrypt.hash(`facebook-${Date.now()}`, 10);
+      user = await prisma.user.create ({
+        data: {
+          email: fbData.email,
+          username: fbData.name,
+          password: hashedPassword,
+          facebook_id: facebookId,
+          role_id: 2
         },
-      },
-    });
+        include: {
+          role: {
+            include:{
+              permissions: true
+            }
+          }
+        }
+      })
+    }
   }
-  const permissions = user.role.permissions.map((p) => p.permission_name);
-  const jwtToken = jwt.sign(
-    {
-      userId: user.id,
-      role: user.role.role_name,
-      permissions,
-    },
-    JWT_SECRET,
-    { expiresIn: '1h' }
-  );
+
+  const { token: jwtToken, permissions } = generateToken(user);
 
   return {
     token: jwtToken,
@@ -272,7 +316,7 @@ export const hustLoginUser = async (taikhoan: string, matkhau: string) => {
   }
 
   let user = await prisma.user.findUnique({
-    where: { email: taikhoan },
+    where: { hust_id: taikhoan },
     include: {
       role: {
         include: {
@@ -283,45 +327,53 @@ export const hustLoginUser = async (taikhoan: string, matkhau: string) => {
   });
 
   if (!user) {
-    const emailPrefix = taikhoan.split('@')[0] ?? taikhoan;
-    const username = emailPrefix.split('.')[0] ?? emailPrefix;
-    const hashedPassword = await bcrypt.hash(`hust-auth-${Date.now()}`, 10);
-
-    const createdUser = await prisma.user.create({
-      data: {
-        email: taikhoan,
-        username: username,
-        password: hashedPassword,
-        role_id: 2,
-      },
-    });
-
-    user = await prisma.user.findUnique({
-      where: { id: createdUser.id },
+    user = await prisma.user.findUnique({ 
+      where: { email: taikhoan},
       include: {
         role: {
           include: {
             permissions: true
-          },
-        },
-      },
+          }
+        }
+      }
     });
 
-    if (!user) {
-      throw new Error('Không thể tạo người dùng')
+    if(user) {
+      user = await prisma.user.update({
+        where: { id: user.id},
+        data: { hust_id: taikhoan},
+        include: {
+          role: {
+            include: {
+              permissions: true
+            }
+          }
+        }
+      })
+    }
+    else {
+      const emailPrefix = taikhoan.split('@')[0] ?? taikhoan;
+      const username = emailPrefix.split('.')[0] ?? emailPrefix;
+      const hashedPassword = await bcrypt.hash(`hust-${Date.now()}`, 10);
+      user = await prisma.user.create ({
+        data: {
+          email: taikhoan,
+          username: username,
+          password: hashedPassword,
+          hust_id: taikhoan,
+          role_id: 2
+        },
+        include: {
+          role: {
+            include: {
+              permissions: true
+            }
+          }
+        }
+      })
     }
   }
-
-  const permissions = user.role.permissions.map((p) => p.permission_name)
-  const token = jwt.sign (
-    {
-      userId: user.id,
-      role: user.role.role_name,
-      permissions: permissions,
-    },
-    JWT_SECRET,
-    { expiresIn: '1h'}
-  );
+  const { token, permissions } = generateToken(user);
 
   return {
     token,
