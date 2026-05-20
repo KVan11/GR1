@@ -499,29 +499,560 @@ model Permission {
 ### CÁC PAYLOAD
 
 - Cấu trúc các gói json
-- Nội dung trao đổi giữa các module, cảm biến
+<img width="1788" height="753" alt="image" src="https://github.com/user-attachments/assets/163bfefc-48fe-4e52-93eb-6e2ca8944934" />
 
- > Trường hợp thiết kế web-api và có swagger, có thể chụp screenshot vài bức ảnh từ swagger ra, dán trực tiếp vào giao diện soạn thảo trên GitHub
- <img width="1060" height="449" alt="image" src="https://github.com/user-attachments/assets/8b75294a-9091-4d41-86f8-fbce03fceac2" />
+<img width="1796" height="745" alt="image" src="https://github.com/user-attachments/assets/58e35050-8179-4b7e-8a7d-a09f8513a399" />
+
+<img width="1790" height="746" alt="image" src="https://github.com/user-attachments/assets/0309c020-1b8b-48b3-845b-434320d33ed5" />
+
+<img width="1788" height="741" alt="image" src="https://github.com/user-attachments/assets/3a758e07-94c3-4ee6-bef7-2b810f672529" />
+
+<img width="1788" height="743" alt="image" src="https://github.com/user-attachments/assets/72333dd1-4b52-4efc-adb4-6aee52cd2de9" />
 
 
 ### ĐẶC TẢ HÀM
 
-- Một số hàm quan trọng
-- Mô tả ý nghĩa của hàm, tham số vào, ra
-- Hoặc có thể tham chiếu, chụp ảnh từ các công cụ như swagger, pydoc, javadoc, doxygen
+- #### Auth Services
+**`registerUser`**
 
-  ```C
-     /**
-      *  Hàm tính ...
-      *  @param  x  Tham số
-      *  @param  y  Tham số
-      */
-     void abc(int x, int y = 2);
-  ```
+```typescript
+export const registerUser = async (userData: any) => {
+  if (!userData?.email || !userData?.username || !userData?.password) {
+    throw new Error('Thiếu email, username hoặc password');
+  }
 
- > Trường hợp thiết kế web-api và có swagger, có thể chụp screenshot vài bức ảnh từ swagger ra, dán trực tiếp vào giao diện soạn thảo trên GitHub
- <img width="1060" height="449" alt="image" src="https://github.com/user-attachments/assets/8b75294a-9091-4d41-86f8-fbce03fceac2" />
+  const existingUser = await prisma.user.findUnique({
+    where: { email: userData.email },
+    select: { id: true },
+  });
+
+  if (existingUser) {
+    throw new Error('Email đã được sử dụng');
+  }
+
+  // 1. Băm mật khẩu
+  const hashedPassword = await bcrypt.hash(userData.password, 10);
+  
+  // 2. Lưu vào DB (Giả sử bạn đã có bảng User trong schema.prisma)
+  try {
+    const user = await prisma.user.create({
+      data: {
+        email: userData.email,
+        username: userData.username,
+        password: hashedPassword,
+        role_id: 2
+      },
+      select: {
+        id: true,
+        email: true,
+        username: true,
+        role_id: true
+      }
+    });
+    return user;
+  } catch (error: any) {
+    if (error?.code === 'P2002') {
+      throw new Error('Email đã được sử dụng');
+    }
+
+    throw error;
+  }
+};
+```
+
+**Mô tả:** Tạo tài khoản người dùng mới với email, username, và mật khẩu.
+
+**Tham số:**
+| Tham số | Kiểu | Mô tả |
+|--------|------|--------|
+| `userData` | Object | Chứa `email`, `username`, `password` |
+| `userData.email` | string | Email đăng ký (duy nhất) |
+| `userData.username` | string | Tên hiển thị |
+| `userData.password` | string | Mật khẩu plain text (sẽ được hash) |
+
+**Giá trị trả về:**
+```typescript
+{
+	id: number,
+	email: string,
+	username: string,
+	role_id: number
+}
+```
+
+**`loginUser`**
+
+```typescript
+export const loginUser = async (email: string, password: string) => {
+  const user = await prisma.user.findUnique({ 
+    where: {email},
+    include: {
+      role: {
+        include: {
+          permissions: true
+        }
+      }
+    }
+  });
+
+  if (!user) throw new Error('Email không tồn tại');
+
+  //kiem tra mat khau
+  const isMatch = await bcrypt.compare(password, user.password);
+  if (!isMatch) throw new Error('Mật khẩu sai');
+
+  const { token, permissions } = generateToken(user);
+
+  return {
+    token,
+    user: {
+      id: user.id,
+      email: user.email,
+      username: user.username,
+      role: user.role.role_name,
+      permissions,
+    },
+  };
+};
+```
+
+**Mô tả:** Xác thực người dùng và phát JWT token.
+
+**Tham số:**
+| Tham số | Kiểu | Mô tả |
+|--------|------|--------|
+| `email` | string | Email người dùng |
+| `password` | string | Mật khẩu plain text |
+
+**Giá trị trả về:**
+```typescript
+{
+	token: string, 
+	user: {
+		id: number,
+		email: string,
+		username: string,
+		role: string,
+		permissions: string[]
+	}
+}
+```
+
+**`googleLoginUser`**
+
+```typescript
+export const googleLoginUser = async (credential: string) => {
+  if (!credential) {
+    throw new Error('Thiếu token Google');
+  }
+
+  const ticket = await googleClient.verifyIdToken({
+    idToken: credential, 
+    audience: process.env.GOOGLE_CLIENT_ID,
+  }as any);
+
+  const payload = ticket.getPayload();
+  if (!payload) {
+    throw new Error('Invalid Google token payload');
+  }
+  const googleId = payload.sub;
+  const email = payload.email;
+  if (!email) {
+    throw new Error('Invalid Google token payload');
+  }
+
+  let user: any = await prisma.user.findUnique({
+    where: { google_id: googleId },
+    include: {
+      role: {
+        include: {
+          permissions: true,
+        },
+      },
+    },
+  });
+
+  if (!user) {
+    if (email) {
+      user = await prisma.user.findUnique ({
+        where: {email},
+        include :{
+          role: {
+            include: {
+              permissions: true
+            }
+          }
+        }
+      });
+    }
+    
+    if (user) {
+      user = await prisma.user.update({
+        where: { id: user.id},
+        data :{
+          google_id: googleId
+        },
+        include:{
+          role: {
+            include: {
+              permissions: true
+            }
+          }
+        }
+      })
+    }
+    else {
+      const hashedPassword = await bcrypt.hash(`google-${Date.now()}`, 10);
+      user = await prisma.user.create({
+        data: {
+          email,
+          username: (payload.name ?? email.split('@')[0]) as string,
+          password: hashedPassword,
+          google_id: googleId,
+          role_id: 2
+        },
+        include: {
+          role:{
+            include: {
+              permissions: true
+            }
+          }
+        }
+      })
+    }
+  }
+
+  const { token, permissions } = generateToken(user);;
+
+  return {
+    token,
+    user: {
+      id: user.id,
+      email: user.email,
+      username: user.username,
+      role: user.role.role_name,
+      permissions,
+    },
+  };
+};
+```
+
+**Mô tả:** Xác thực đăng nhập qua Google và tự động liên kết với tài khoản đã có trên hệ thống nếu trùng email
+
+**Tham số:**
+| Tham số | Kiểu | Mô tả |
+|--------|------|--------|
+| `credential` | string | Google ID token (từ client) |
+
+**Giá trị trả về:**
+```typescript
+{
+	token: string,
+	user: {
+		id: number,
+		email: string,
+		username: string,
+		role: string,
+		permissions: string[]
+	}
+}
+```
+
+**`facebookLoginUser`**
+```typescript
+export const facebookLoginUser = async (token: string) => {
+  const fbRes = await fetch(`https://graph.facebook.com/me?fields=id,name,email&access_token=${token}`);
+  const fbData: any = await fbRes.json();
+
+  if(!fbData.email) throw new Error('Không lấy được email từ Facebook');
+  
+  const facebookId = fbData.id;
+
+  let user = await prisma.user.findUnique({
+    where: { facebook_id: facebookId },
+    include: {
+      role: {
+        include: {
+          permissions: true,
+        },
+      },
+    },
+  });
+
+  if (!user) {
+    user = await prisma.user.findUnique({
+      where: {email: fbData.email},
+      include: {
+        role: {
+          include: {
+            permissions: true
+          }
+        }
+      }
+    })
+
+    if(user){
+      user = await prisma.user.update ({
+        where: {id: user.id},
+        data: { facebook_id: facebookId},
+        include: {
+          role: {
+            include: {
+              permissions: true
+            }
+          }
+        }
+      })
+    }
+    else {
+      const hashedPassword = await bcrypt.hash(`facebook-${Date.now()}`, 10);
+      user = await prisma.user.create ({
+        data: {
+          email: fbData.email,
+          username: fbData.name,
+          password: hashedPassword,
+          facebook_id: facebookId,
+          role_id: 2
+        },
+        include: {
+          role: {
+            include:{
+              permissions: true
+            }
+          }
+        }
+      })
+    }
+  }
+
+  const { token: jwtToken, permissions } = generateToken(user);
+
+  return {
+    token: jwtToken,
+    user: {
+      id: user.id,
+      email: user.email,
+      username: user.username,
+      role: user.role.role_name,
+      permissions,
+    },
+  }
+};
+```
+
+**Mô tả:** Sử dụng Facebook Graph API để xác thực mã truy cập (access token) của người dùng và tự động liên kết với tài khoản đã có trên hệ thống
+
+**Tham số:**
+| Tham số | Kiểu | Mô tả |
+|--------|------|--------|
+| `token` | string | Facebook access token |
+
+**Giá trị trả về:**
+```typescript
+{
+	token: string,
+	user: {
+		id: number,
+		email: string,
+		username: string,
+		role: string,
+		permissions: string[]
+	}
+}
+```
+
+**`hustLoginUser`**
+
+```typescript
+export const hustLoginUser = async (taikhoan: string, matkhau: string) => {
+  if(!taikhoan || !matkhau) {
+    throw new Error ('Thiếu tài khoản hoặc mật khẩu Hust')
+  }
+
+  const apiUrl = process.env.HUST_AUTH_API_URL;
+
+  const queryParams = new URLSearchParams({
+    taikhoan: taikhoan.trim(),
+    matkhau: matkhau.trim()
+  }).toString();
+
+  const fullUrl = `${apiUrl}?${queryParams}`;
+  console.log("Đang gọi URL:", fullUrl);
+  const response = await fetch(fullUrl, {
+    method: 'GET',
+    headers: {
+      'accept': 'text/plain',
+    },
+  });
+
+  const result = (await response.text()).trim();
+
+  if(result !== "1") {
+    throw new Error ('Tài khoản hoặc mật khẩu không chính xác')
+  }
+
+  let user = await prisma.user.findUnique({
+    where: { hust_id: taikhoan },
+    include: {
+      role: {
+        include: {
+          permissions: true
+        },
+      },
+    },
+  });
+
+  if (!user) {
+    user = await prisma.user.findUnique({ 
+      where: { email: taikhoan},
+      include: {
+        role: {
+          include: {
+            permissions: true
+          }
+        }
+      }
+    });
+
+    if(user) {
+      user = await prisma.user.update({
+        where: { id: user.id},
+        data: { hust_id: taikhoan},
+        include: {
+          role: {
+            include: {
+              permissions: true
+            }
+          }
+        }
+      })
+    }
+    else {
+      const emailPrefix = taikhoan.split('@')[0] ?? taikhoan;
+      const username = emailPrefix.split('.')[0] ?? emailPrefix;
+      const hashedPassword = await bcrypt.hash(`hust-${Date.now()}`, 10);
+      user = await prisma.user.create ({
+        data: {
+          email: taikhoan,
+          username: username,
+          password: hashedPassword,
+          hust_id: taikhoan,
+          role_id: 2
+        },
+        include: {
+          role: {
+            include: {
+              permissions: true
+            }
+          }
+        }
+      })
+    }
+  }
+  const { token, permissions } = generateToken(user);
+
+  return {
+    token,
+    user: {
+      id: user.id,
+      email: user.email,
+      username: user.username,
+      role: user.role.role_name,
+      permissions,
+    },
+  };
+};
+```
+
+**Mô tả:** Kết nối với hệ thống xác thực của HUST để kiểm tra tài khoản và ự động ghép nối với tài khoản hiện có trên hệ thống nếu trùng thông tin
+
+**Tham số:**
+| Tham số | Kiểu | Mô tả |
+|--------|------|--------|
+| `taikhoan` | string | HUST student/staff ID hoặc email |
+| `matkhau` | string | Mật khẩu HUST |
+
+**Giá trị trả về:**
+```typescript
+{
+	token: string,
+	user: {
+		id: number,
+		email: string,
+		username: string,
+		role: string,
+		permissions: string[]
+	}
+}
+```
+
+- #### Auth Middleware
+
+**`verifyToken`**
+
+```typescript
+export const verifyToken = (req: Request, res: Response, next: NextFunction) => {
+    const authHeader = req.headers.authorization;
+    const token = authHeader && authHeader.split(' ')[1];
+
+    if (!token) {
+        return res.status(401).json({ error: "Bạn chưa đăng nhập (Thiếu Token)" });
+    }
+
+    try {
+        const decoded = jwt.verify(token, JWT_SECRET);
+        (req as any).user = decoded; // Lưu thông tin giải mã (id, permissions...) vào req.user
+        next();
+    } catch (error) {
+        return res.status(403).json({ error: "Token không hợp lệ hoặc đã hết hạn" });
+    }
+};
+```
+
+**Mô tả:** Kiểm tra và xác thực tính hợp lệ của JWT được gửi kèm trong Header, nhằm đảm bảo người dùng có quyền truy cập vào các tài nguyên được bảo vệ
+
+**Tham số:**
+- `req` (Express.Request) - request object
+- `res` (Express.Response) - response object
+- `next` (Function) - callback gọi hàm tiếp theo trong chain
+
+**Xử lý nghiệp vụ:**
+- Nếu token hợp lệ: gán `req.user = decoded` (chứa userId, role, permissions) và chuyển tiếp yêu cầu đến hàm xử lý tiếp theo (next())
+- Nếu thiếu token: Từ chối yêu cầu và trả về lỗi HTTP 401 (người dùng "chưa chứng minh được mình là ai") kèm thông báo cụ thể
+- Nếu token không hợp lệ: Từ chối yêu cầu và trả về lỗi HTTP 403 (token hợp lệ nhưng role của user không đủ quyền) kèm thông báo chi tiết về lỗi xác thực
+
+**`checkPermission`**
+```typescript
+export const checkPermission = (permission: string) => {
+    return (req: Request, res: Response, next: NextFunction) => {
+        const user = (req as any).user;
+        
+        const userPermissions: string[] = user?.permissions || [];
+
+        if (userPermissions.includes(permission)) {
+            next(); // Có quyền -> Cho phép đi tiếp
+        } 
+        else {
+            return res.status(403).json({
+                error: `Bạn không có quyền truy cập: ${permission}`
+            });
+        }
+    };
+};
+```
+
+**Mô tả:** Middleware kiểm tra quyền của user từ token. **Phải sử dụng sau `verifyToken`** vì nó cần thông tin từ req.user đã được khởi tạo bởi verifyToken trước đó
+
+**Tham số:**
+| Tham số | Kiểu | Mô tả |
+|--------|------|--------|
+| `permission_name` | string | Tên quyền cần kiểm tra |
+
+**Giá trị trả về:** Middleware function `(req, res, next) => void`
+
+**Xử lý nghiệp vụ:**
+- Nếu user có quyền: gọi `next()` để tiếp tục
+- Nếu user không có quyền: trả HTTP 403 với error message
 
 
 ### PHÁT SINH
