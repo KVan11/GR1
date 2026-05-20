@@ -117,29 +117,101 @@ Frontend của sẽ chạy mặc định tại địa chỉ: http://localhost:51
 - Hoặc mở Swagger: http://localhost:3000/api-docs để thử API
 ## NGUYÊN LÝ CƠ BẢN
 
-> Tham khảo cách trình bày như ở đây [Code Project](https://www.codeproject.com/Articles/5385907/Managing-Cplusplus-Projects-with-Conan-and-CMake)
-
 ### TÍCH HỢP HỆ THỐNG
 
-- Mô tả các thành phần phần cứng và vai trò của chúng: máy chủ, máy trạm, thiết bị IoT, MQTT Server, module cảm biến IoT...
-- Mô tả các thành phần phần mềm và vai trò của chúng, vị trí nằm trên phần cứng nào: Front-end, Back-end, Worker, Middleware...
+#### Sơ đồ hệ thống
+```mermaid
+flowchart TB
+ subgraph subGraph0["Client Layer"]
+        Browser["Web Browser<br>(React + Vite)<br>port: 5173"]
+  end
+ subgraph Frontend["Frontend"]
+        ReactApp["React Application<br>- AuthForm.tsx<br>- LoginForm.tsx<br>- RegisterForm.tsx"]
+        AxiosClient["Axios Client<br>baseURL: /api<br>Authorization Header"]
+  end
+ subgraph Network["Network"]
+        Proxy["Vite Proxy<br>/api -&gt; localhost:3000"]
+  end
+ subgraph subGraph3["Backend Services"]
+        ExpressApp["Express.js Server<br>port: 3000"]
+        AuthRoute["Auth Routes<br>/api/auth/register<br>/api/auth/login<br>/api/auth/google<br>/api/auth/facebook<br>/api/auth/hust"]
+        AuthMiddleware["Auth Middleware<br>- verifyToken<br>- checkPermission"]
+        AuthService["Auth Service<br>- registerUser<br>- loginUser<br>- googleLoginUser<br>- facebookLoginUser<br>- hustLoginUser"]
+  end
+ subgraph subGraph4["Database Layer"]
+        PostgreSQL["PostgreSQL Database<br>- Users<br>- Roles<br>- Permissions"]
+  end
+ subgraph subGraph5["External Services"]
+        GoogleAuth["Google OAuth 2.0<br>verify ID Token"]
+        FacebookAPI["Facebook Graph API<br>verify Access Token"]
+        HUSTAuth["HUST Auth API<br>taikhoan/matkhau"]
+  end
+    Browser -- HTTP Request --> Proxy
+    Proxy -- axios --> AxiosClient
+    AxiosClient -- HTTP(S) --> ExpressApp
+    ReactApp --> AxiosClient
+    ExpressApp --> AuthRoute
+    AuthRoute -- verify & check --> AuthMiddleware
+    AuthRoute --> AuthService
+    AuthService -- Prisma Client --> PostgreSQL
+    AuthService -- verify --> GoogleAuth & FacebookAPI & HUSTAuth
 
-> Nên sử dụng cú pháp mermaid trong markdown, cho phép từ text sinh ra đồ thị. Như vậy dễ hiệu chỉnh. Ví dụ, hoặc [có thể sửa online rồi copy vào tài liệu](https://mermaid.live/edit#pako:eNqFkrFOwzAQhl_FugmktmqbNC0ZEIgyMCAhJISEsrjJtbHU2MGxRUuVmZkHYGFjQDxAx_IifROuaQItFNWTff7-_-7sm0GoIgQfMry3KEPsCz7SPAkkKxe3RkmbDFBvxEKjNDuX0U22GU65NiIUKZeG3eLgGon79_b06uJkxgIw0xQD8GkXKmm0GgfA8t2qPjd8wDP8pYvK8LawrK5-fFyV4rMwVmyCCft8Fj9gdV0ntBStyOX8hZnFOztItUpEhoc7FIU3NVI6C8mi5fyDjcVy_mS3eIKIrhrYw1dYfSPBBkjlL16nf-y3Oi0QJuPF255GH3CwhqEGIy0i8Id8nGENEtQJX51htrKgB48xqV4ch9yOTQCBzElHn3OnVAK-0ZaUWtlRXB1sSt9TTdU3gTJCfaasNOB3CgPwZzAB32m2Gi2PluM1nbbnujWYUtRreG33qOd22r2u1207eQ0ei4zNRq9LBhgJmsjL9SgXE51_AYzG7q0)
+     Browser:::frontend
+     ReactApp:::frontend
+     AxiosClient:::frontend
+     Proxy:::frontend
+     ExpressApp:::backend
+     AuthRoute:::backend
+     AuthMiddleware:::backend
+     AuthService:::backend
+     PostgreSQL:::db
+     GoogleAuth:::external
+     FacebookAPI:::external
+     HUSTAuth:::external
+    classDef frontend fill:#e1f5ff,stroke:#01579b,stroke-width:2px
+    classDef backend fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
+    classDef db fill:#fce4ec,stroke:#880e4f,stroke-width:2px
+    classDef external fill:#fff3e0,stroke:#e65100,stroke-width:2px
+```
+
+#### Luồng hoạt động
 ```mermaid
 sequenceDiagram
-        autonumber
-        actor EndUser
-        participant WebReact
-        participant WebAPI@{ "type": "control" }
-        participant Database@{ "type": "database" }
-        EndUser->>WebReact: cho xem đi
-        WebReact-->>EndUser: chờ tí (promise)
-        WebReact->>WebAPI: cho xin dữ liệu
-        WebAPI->>Database: cho xin dữ liệu
-        Database-->>WebAPI: dữ liệu đây
-        WebAPI-->>WebReact: đây nhé
-        WebReact-->>EndUser: web đây
-```
+	participant User as User
+	participant UI as React App
+	participant Client as authApi/axiosClient
+	participant Proxy as Vite Proxy
+	participant API as Express API
+	participant Service as Auth Service
+	participant DB as PostgreSQL
+
+	User->>UI: Nhập email/password hoặc chọn Google/Facebook/HUST
+	UI->>Client: Gửi submit login/register
+	Client->>Proxy: POST /api/auth/*
+	Proxy->>API: Forward request
+	API->>Service: Xử lý xác thực
+	Service->>DB: Tìm/ghi user, role, permissions
+	DB-->>Service: Trả dữ liệu
+	Service-->>API: Trả token + user
+	API-->>Client: HTTP 200
+	Client-->>UI: Trả response
+	UI->>User: Lưu token/user vào localStorage và chuyển sang /profile
+
+	Note over Client: Các request sau sẽ tự gắn Authorization: Bearer <token>
+	UI->>Client: Gửi request tới endpoint bảo vệ
+	Client->>Proxy: Request kèm token
+	Proxy->>API: Forward request
+	API->>Service: verifyToken + checkPermission
+	Service->>DB: Đọc/kiểm tra quyền nếu cần
+	Service-->>API: Cho phép hoặc từ chối
+	API-->>Client: HTTP 200/401/403
+	Client-->>UI: Trả kết quả
+ ```
+| Thành phần | Vai trò | Nằm trên đâu trong project |
+|---|---|---|
+| Front-end | Hiển thị giao diện cho người dùng, nhận dữ liệu nhập vào, gọi API đăng nhập hoặc đăng ký, lưu token sau khi login thành công |
+| Back-end | Nhận request từ frontend, xử lý đăng nhập, đăng ký, xác thực token, kiểm tra quyền và trả dữ liệu về |
+| Middleware | Đứng giữa request và controller để kiểm tra trước khi xử lý, ví dụ `verifyToken` và `checkPermission` |
 
 ### CÁC THUẬT TOÁN CƠ BẢN
 - Băm mật khẩu bằng bcryptjs
@@ -273,23 +345,11 @@ flowchart TD
     H --> Z
     I --> Z
 ```
-> Nên sử dụng cú pháp mermaid trong markdown, cho phép từ text sinh ra đồ thị. Như vậy dễ hiệu chỉnh. Ví dụ, hoặc [có thể sửa online rồi copy vào tài liệu](https://www.mermaidchart.com/play?utm_source=mermaid_live_editor&utm_medium=share#pako:eNqrVkrOT0lVslJKy8kvT85ILCpRCHGJyVMAAsfokMOr8hRyMx_ubsyLVdDVtaspyXy4a39BjYKThu_hhZUKyRkPdy_XhKh2AilQcK4OT00qzixJrYWIOoO1-eel1ii4RLsV5eeV6KbmpSikJVqlJeqmVqbGIisLKc-vUXCNdkpMzkZSVZxaVJZaBFSoVAsA0_I7vg)
-
-```mermaid
-flowchart TD
-    A[Tên miền] -->|tiếp| B(Máy chủ)
-    B --> C{Website}
-    C -->|One| D[Front-end fa:fa-eye]
-    C -->|Two| E[Back-end fa:fa-server]
-
-```
 
 
 ### THIẾT KẾ CƠ SỞ DỮ LIỆU
 
 - Sơ đồ quan hệ thực thể thể hiện mối quan hệ giữa các trường thông tin.
-
-> Nên sử dụng cú pháp mermaid trong markdown, cho phép từ text sinh ra đồ thị. Như vậy dễ hiệu chỉnh. Ví dụ, hoặc [có thể sửa online rồi copy vào tài liệu](https://mermaidchart.com/play?utm_source=mermaid_live_editor&utm_medium=share#pako:eNqdUsGKwjAQ_ZUw5yra1qq5qoc9iIurl6WwhCatgTbpphNYt_rvm7ZWlIKHndPM4-XNy2NqSDQXQEGYtWSZYUWsiKvV8eOw22725HIZjXRNdvu1Gygpc5aIquN0WEO43Ahfb4fN1rESrZBJdeO973fr4-rwJNUzpUpyy3vF-9a6m5uq0EiVEckHkGKFGICiYDLv0OujzdeKnKEg2nCXgusG1AoZ2upJtf_UP5ymuWZISiMTMTTaBfOgKhWSb8sUSjy_0gAPMiM50JTllfCgEMZF4WZoxWLAk3AugLqWi5TZHGOIVfOuZOpT6wIoGuteGm2zUz_Yssnmdht3hlAuqpW2CoEuWwGgNfwADSbT8TRyFUSTwI_C0IOzQ6Nx5IfLRTjzF_No7gdXD37bjZPxYj7zQHCJ2my7U2wv8voHm3HFLQ) 
 
 ```mermaid
 erDiagram
